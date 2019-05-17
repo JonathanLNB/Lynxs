@@ -116,9 +116,11 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
             @Override
             public void onFinish() {
-                SmsManager sms = SmsManager.getDefault();
+                System.out.println(contactos);
                 for (int i = 0; i < contactosArray.length; i++) {
-                    sms.sendTextMessage(contactosArray[i].split("=")[0], null, "¡" + contactosArray[i].split("=")[1]+" ayuda! está es mi ubicación 20.5409757, -100.8128918", null, null);
+                    System.out.println("Hola: "+contactosArray[i].split("=")[0]+" "+contactosArray[i].split("=")[1]);
+                    SmsManager sms = SmsManager.getDefault();
+                    sms.sendTextMessage(contactosArray[i].split("=")[1], null, "¡" + contactosArray[i].split("=")[0]+" ayuda! está es mi ubicación 20.5409757, -100.8128918", null, null);
                 }
             }
         };
@@ -352,7 +354,7 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
                         @Override
                         public void run() {
-                            if(strReceived.equalsIgnoreCase("E")){
+                            if(strReceived.equalsIgnoreCase("C")){
                                 contador.start();
                             }
                             else{
