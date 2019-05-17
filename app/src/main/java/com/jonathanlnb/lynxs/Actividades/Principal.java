@@ -9,15 +9,18 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
+import android.os.CountDownTimer;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
+import android.telephony.SmsManager;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -61,14 +64,17 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     private final String UUID_STRING_WELL_KNOWN_SPP = "00001101-0000-1000-8000-00805F9B34FB";
     private FragmentManager fragmentManager = getSupportFragmentManager();
     private FragmentTransaction fragmentTransaction;
+    private CountDownTimer contador = null;
     private BluetoothAdapter bluetoothAdapter;
     private ArrayList<BluetoothDevice> pairedDeviceArrayList;
     private ArrayAdapter<BluetoothDevice> pairedDeviceAdapter;
+    private SharedPreferences sharedPreferences;
     private UUID myUUID;
 
     private ThreadConnectBTdevice myThreadConnectBTdevice;
     private ThreadConnected myThreadConnected;
-
+    private String contactosArray[];
+    private String contactos;
     private GoogleMap mMap;
 
     @Override
@@ -100,7 +106,22 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
             finish();
             return;
         }
+        sharedPreferences = getSharedPreferences(getString(R.string.shareKey), MODE_PRIVATE);
+        contactos = sharedPreferences.getString("contactos", "");
+        contactosArray = contactos.split("%");
+        contador = new CountDownTimer(5000, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+            }
 
+            @Override
+            public void onFinish() {
+                SmsManager sms = SmsManager.getDefault();
+                for (int i = 0; i < contactosArray.length; i++) {
+                    sms.sendTextMessage(contactosArray[i].split("=")[0], null, "¡" + contactosArray[i].split("=")[1]+" ayuda! está es mi ubicación 20.5409757, -100.8128918", null, null);
+                }
+            }
+        };
     }
 
 
@@ -331,8 +352,13 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
                         @Override
                         public void run() {
-                            //textStatus.append(strReceived);
-                            //textByteCnt.append(strByteCnt);
+                            if(strReceived.equalsIgnoreCase("E")){
+                                contador.start();
+                            }
+                            else{
+                                if(contador!=null)
+                                    contador.cancel();
+                            }
                         }
                     });
 

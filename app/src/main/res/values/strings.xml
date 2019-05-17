@@ -15,4 +15,5 @@
     <string name="correo">Correo del contacto</string>
     <string name="elige_contactos">Administrado de contactos</string>
     <string name="no_contactos">No tienes contactos de confianza 😭</string>
+    <string name="shareKey">lynxs</string>
 </resources>

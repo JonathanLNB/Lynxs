@@ -3,6 +3,7 @@ package com.jonathanlnb.lynxs.Actividades;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -41,6 +42,9 @@ public class AgregarContacto extends AppCompatActivity {
     private Uri contacto;
     private Typeface TF;
     private ArrayList<Contacto> contactos = new ArrayList<Contacto>();
+    private SharedPreferences sharedPreferences;
+    private SharedPreferences.Editor ed;
+    private String contactosAux;
 
     @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     @Override
@@ -50,11 +54,21 @@ public class AgregarContacto extends AppCompatActivity {
         ButterKnife.bind(this);
         TF = Typeface.createFromAsset(getAssets(), "GoogleSans-Regular.ttf");
         vTexto.setTypeface(TF);
-        if(contactos.size() == 0)
+        sharedPreferences = getSharedPreferences(getString(R.string.shareKey), MODE_PRIVATE);
+        contactosAux = sharedPreferences.getString("contactos", "");
+        if(contactosAux.contains("%")) {
+            String contactosArray[] = contactosAux.split("%");
+            for (int i = 0; i < contactosArray.length; i++) {
+                contactos.add(new Contacto(i, null, contactosArray[i].split("=")[0], contactosArray[i].split("=")[1], ""));
+            }
+            rContactos.setAdapter(new ContactoAdapter(contactos, AgregarContacto.this));
+            rContactos.setLayoutManager(new LinearLayoutManager(AgregarContacto.this));
+        }
+        if (contactos.size() == 0)
             Tools.showMessage(this, getString(R.string.no_contactos));
     }
 
-    private Integer getContacto(Uri uri){
+    private Integer getContacto(Uri uri) {
         String id = null;
         Cursor contactCursor = getContentResolver().query(
                 uri,
@@ -68,10 +82,11 @@ public class AgregarContacto extends AppCompatActivity {
         contactCursor.close();
         return Integer.parseInt(id);
     }
+
     private String getTelefono(Uri uri) {
-        String phone=null;
-        String[] projeccion = new String[] { ContactsContract.Data._ID, ContactsContract.Data.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.TYPE };
-        String selectionClause = ContactsContract.Data.DISPLAY_NAME +" = '"+getNombre(contacto)+"' AND "+ContactsContract.Data.MIMETYPE + "='" +
+        String phone = null;
+        String[] projeccion = new String[]{ContactsContract.Data._ID, ContactsContract.Data.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.TYPE};
+        String selectionClause = ContactsContract.Data.DISPLAY_NAME + " = '" + getNombre(contacto) + "' AND " + ContactsContract.Data.MIMETYPE + "='" +
                 ContactsContract.CommonDataKinds.Phone.CONTENT_ITEM_TYPE + "' AND "
                 + ContactsContract.CommonDataKinds.Phone.NUMBER + " IS NOT NULL";
         String sortOrder = ContactsContract.Data.DISPLAY_NAME + " ASC";
@@ -82,14 +97,15 @@ public class AgregarContacto extends AppCompatActivity {
                 selectionClause,
                 null,
                 sortOrder);
-        if(c.moveToNext()){
-            if(c.getString(1).equalsIgnoreCase(getNombre(contacto))){
+        if (c.moveToNext()) {
+            if (c.getString(1).equalsIgnoreCase(getNombre(contacto))) {
                 phone = c.getString(2);
             }
         }
         phone = phone.replaceAll(" ", "");
         return phone;
     }
+
     private String getNombre(Uri uri) {
         String name = null;
         ContentResolver contentResolver = getContentResolver();
@@ -100,13 +116,14 @@ public class AgregarContacto extends AppCompatActivity {
                 null,
                 null);
 
-        if(c.moveToFirst()){
+        if (c.moveToFirst()) {
             name = c.getString(0);
         }
         c.close();
 
         return name;
     }
+
     private String getCorreo(Uri uri) {
         Cursor cursor = null;
         String email = "";
@@ -126,6 +143,7 @@ public class AgregarContacto extends AppCompatActivity {
         }
         return email;
     }
+
     private Bitmap getFoto(Uri uri) {
         Bitmap photo = null;
         String id = null;
@@ -162,10 +180,20 @@ public class AgregarContacto extends AppCompatActivity {
 
     @RequiresApi(api = Build.VERSION_CODES.KITKAT)
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        String aux = "";
+        ed = sharedPreferences.edit();
         if (requestCode == PICK_CONTACT_REQUEST) {
             if (resultCode == RESULT_OK) {
                 contacto = data.getData();
                 contactos.add(new Contacto(Integer.parseInt("" + getContacto(contacto)), getFoto(contacto), getNombre(contacto), getTelefono(contacto), getCorreo(contacto)));
+                for (int i = 0; i < contactos.size(); i++) {
+                    if (i != contactos.size() - 1)
+                        aux += contactos.get(i).getNombre() + "=" + contactos.get(i).getTelefono() + "%";
+                    else
+                        aux += contactos.get(i).getNombre() + "=" + contactos.get(i).getTelefono();
+                }
+                ed.putString("contactos", aux);
+                ed.commit();
                 rContactos.setAdapter(new ContactoAdapter(contactos, AgregarContacto.this));
                 rContactos.setLayoutManager(new LinearLayoutManager(AgregarContacto.this));
                 Tools.showMessage(AgregarContacto.this, "Contacto agregado correctamente");
