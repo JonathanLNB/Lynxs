@@ -2,10 +2,15 @@ package com.jonathanlnb.lynxs.Actividades;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.job.JobInfo;
+import android.app.job.JobParameters;
+import android.app.job.JobScheduler;
+import android.app.job.JobService;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.BroadcastReceiver;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -18,6 +23,7 @@ import android.location.LocationProvider;
 import android.net.Uri;
 import android.os.Build;
 import android.os.CountDownTimer;
+import android.os.Handler;
 import android.provider.Settings;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
@@ -67,7 +73,9 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     };
 
     private static final int REQUEST_ENABLE_BT = 1;
+    private static final int ID_SERVICIO_JOB = 101;
     private final String UUID_STRING_WELL_KNOWN_SPP = "00001101-0000-1000-8000-00805F9B34FB";
+    public JobInfo jobInfo;
     private FragmentManager fragmentManager = getSupportFragmentManager();
     private FragmentTransaction fragmentTransaction;
     private CountDownTimer contador = null;
@@ -78,7 +86,7 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     private SharedPreferences sharedPreferences;
     private UUID myUUID;
 
-    private ThreadConnectBTdevice myThreadConnectBTdevice;
+    private static ThreadConnectBTdevice myThreadConnectBTdevice;
     private ThreadConnected myThreadConnected;
     private String contactosArray[];
     private String contactos;
@@ -201,7 +209,9 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     @Override
     protected void onDestroy() {
         super.onDestroy();
-
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            endJob();
+        }
         if (myThreadConnectBTdevice != null) {
             myThreadConnectBTdevice.cancel();
         }
@@ -233,7 +243,41 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
     public void setDispositivo(BluetoothDevice device) {
         myThreadConnectBTdevice = new ThreadConnectBTdevice(device);
-        myThreadConnectBTdevice.start();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            execJob();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void execJob() {
+        ComponentName componentName = new ComponentName(Principal.this, MJobScheduler.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            jobInfo = new JobInfo.Builder(ID_SERVICIO_JOB, componentName)
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setPersisted(false)
+                    .setMinimumLatency(5 * 1000)
+                    .build();
+        } else {
+            jobInfo = new JobInfo.Builder(ID_SERVICIO_JOB, componentName)
+                    .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+                    .setPersisted(false)
+                    .setPeriodic(5 * 1000)
+                    .build();
+        }
+        JobScheduler scheduler = (JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
+        int resultado = scheduler.schedule(jobInfo);
+        if (resultado == JobScheduler.RESULT_SUCCESS) {
+            Log.println(Log.ASSERT, "0000", "job success");
+        } else {
+            Log.println(Log.ASSERT, "0000", "job fail");
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    private void endJob() {
+        JobScheduler scheduler = (JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
+        scheduler.cancel(ID_SERVICIO_JOB);
+        Log.println(Log.ASSERT, "0000", "job terminado");
     }
 
     @Override
@@ -403,6 +447,62 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
+        }
+    }
+
+
+    @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+    public static class MJobScheduler extends JobService {
+        private static final int HANDLER_DELAY = 1000 * 25 * 1;
+        private final String TAG = MJobScheduler.class.getSimpleName();
+        Handler handler;
+        boolean isWorking = false;
+        private Context context;
+        private Thread workerThread = null;
+
+        @Override
+
+        public void onCreate() {
+            super.onCreate();
+            context = getApplicationContext();
+        }
+
+        @Override
+        public boolean onStartJob(final JobParameters params) {
+            Log.println(Log.ASSERT, "empezo0000", "Job started0000");
+            doWork(params);
+            return true;
+        }
+
+
+        private void doWork(final JobParameters jobParameters) {
+            if (workerThread == null || !workerThread.isAlive()) {
+                workerThread = new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        Log.println(Log.ASSERT, "service000", "Intent recived000");
+
+                        handler = new Handler();
+                        handler.postDelayed(new Runnable() {
+                            public void run() {
+
+                                myThreadConnectBTdevice.start();
+
+                                handler.postDelayed(this, HANDLER_DELAY);
+                            }
+                        }, 0);
+                        Log.println(Log.ASSERT, "termino", "Job finished!");
+                        jobFinished(jobParameters, true);
+                    }
+                });
+                workerThread.run();
+            }
+        }
+
+        @Override
+        public boolean onStopJob(JobParameters params) {
+            Log.d(TAG, "Job cancelled before being completed.");
+            return false;
         }
     }
 
