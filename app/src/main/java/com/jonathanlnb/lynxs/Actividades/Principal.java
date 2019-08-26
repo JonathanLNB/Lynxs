@@ -11,9 +11,14 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.location.LocationProvider;
 import android.net.Uri;
 import android.os.Build;
 import android.os.CountDownTimer;
+import android.provider.Settings;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
@@ -21,6 +26,7 @@ import android.os.Bundle;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.app.FragmentTransaction;
 import android.telephony.SmsManager;
+import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
@@ -66,6 +72,7 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     private FragmentTransaction fragmentTransaction;
     private CountDownTimer contador = null;
     private BluetoothAdapter bluetoothAdapter;
+    private GoogleMap mMap;
     private ArrayList<BluetoothDevice> pairedDeviceArrayList;
     private ArrayAdapter<BluetoothDevice> pairedDeviceAdapter;
     private SharedPreferences sharedPreferences;
@@ -75,7 +82,9 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
     private ThreadConnected myThreadConnected;
     private String contactosArray[];
     private String contactos;
-    private GoogleMap mMap;
+    private LatLng latLng;
+    private float zoom = 15f;
+    private boolean entro = false, entroL = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -118,9 +127,9 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
             public void onFinish() {
                 System.out.println(contactos);
                 for (int i = 0; i < contactosArray.length; i++) {
-                    System.out.println("Hola: "+contactosArray[i].split("=")[0]+" "+contactosArray[i].split("=")[1]);
+                    System.out.println("Hola: " + contactosArray[i].split("=")[0] + " " + contactosArray[i].split("=")[1]);
                     SmsManager sms = SmsManager.getDefault();
-                    sms.sendTextMessage(contactosArray[i].split("=")[1], null, "¡" + contactosArray[i].split("=")[0]+" ayuda! está es mi ubicación 20.5409757, -100.8128918", null, null);
+                    sms.sendTextMessage(contactosArray[i].split("=")[1], null, "¡" + contactosArray[i].split("=")[0] + " ayuda! está es mi ubicación " + latLng.latitude + ", " + latLng.longitude, null, null);
                 }
             }
         };
@@ -278,9 +287,7 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
             if (success) {
                 //connect successful
-                final String msgconnected = "connect successful:\n"
-                        + "BluetoothSocket: " + bluetoothSocket + "\n"
-                        + "BluetoothDevice: " + bluetoothDevice;
+                final String msgconnected = "Dispositivo Conectado";
 
                 runOnUiThread(new Runnable() {
 
@@ -354,11 +361,10 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
 
                         @Override
                         public void run() {
-                            if(strReceived.equalsIgnoreCase("C")){
+                            if (strReceived.equalsIgnoreCase("C")) {
                                 contador.start();
-                            }
-                            else{
-                                if(contador!=null)
+                            } else {
+                                if (contador != null)
                                     contador.cancel();
                             }
                         }
@@ -400,8 +406,98 @@ public class Principal extends FragmentActivity implements OnMapReadyCallback, V
         }
     }
 
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
+        } else {
+            locationStart();
+        }
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    private void locationStart() {
+        LocationManager mlocManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
+        Localizacion Local = new Localizacion();
+        final boolean gpsEnabled = mlocManager.isProviderEnabled(LocationManager.GPS_PROVIDER);
+        if (!gpsEnabled) {
+            if (!entroL) {
+                Intent settingsIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                startActivity(settingsIntent);
+                entroL = true;
+            } else {
+                Tools.showMessage(this, getString(R.string.no_gps));
+            }
+        }
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION,}, 1000);
+            return;
+        }
+        mlocManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 100, (LocationListener) Local);
+        mlocManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 100, (LocationListener) Local);
+
+    }
+
+    @RequiresApi(api = Build.VERSION_CODES.KITKAT)
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == 1000) {
+            if (grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                locationStart();
+                return;
+            }
+        }
+    }
+
+    public void setLocation(Location loc) {
+        //Obtener la direccion de la calle a partir de la latitud y la longitud
+        if (loc.getLatitude() != 0.0 && loc.getLongitude() != 0.0) {
+            latLng = new LatLng(loc.getLatitude(), loc.getLongitude());
+            mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(latLng, zoom));
+            //Aqui va lo bueno
+        }
+    }
+
+    /* Aqui empieza la Clase Localizacion */
+    public class Localizacion implements LocationListener {
+        @Override
+        public void onLocationChanged(Location loc) {
+            // Este metodo se ejecuta cada vez que el GPS recibe nuevas coordenadas
+            // debido a la deteccion de un cambio de ubicacion
+            if (!entro) {
+                setLocation(loc);
+                entro = true;
+            }
+
+        }
+
+        @Override
+        public void onProviderDisabled(String provider) {
+        }
+
+        @Override
+        public void onProviderEnabled(String provider) {
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras) {
+            switch (status) {
+                case LocationProvider.AVAILABLE:
+                    Log.d("debug", "LocationProvider.AVAILABLE");
+                    break;
+                case LocationProvider.OUT_OF_SERVICE:
+                    Log.d("debug", "LocationProvider.OUT_OF_SERVICE");
+                    break;
+                case LocationProvider.TEMPORARILY_UNAVAILABLE:
+                    Log.d("debug", "LocationProvider.TEMPORARILY_UNAVAILABLE");
+                    break;
+            }
+        }
+    }
+
     @OnClick(R.id.bAgregarContacto)
-    public void agregarContacto(){
+    public void agregarContacto() {
         Intent i = new Intent(this, AgregarContacto.class);
         startActivity(i);
     }

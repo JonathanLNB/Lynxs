@@ -16,4 +16,5 @@
     <string name="elige_contactos">Administrado de contactos</string>
     <string name="no_contactos">No tienes contactos de confianza 😭</string>
     <string name="shareKey">lynxs</string>
+    <string name="no_gps">No podemos localizar su GPS 😰</string>
 </resources>
